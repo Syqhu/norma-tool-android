@@ -489,6 +489,18 @@ h3 {
   text-decoration: line-through;
 }
 
+.daily-item span {
+  display: grid;
+  gap: 3px;
+}
+
+.daily-item span em {
+  color: var(--green);
+  font-size: 12px;
+  font-style: normal;
+  text-decoration: none;
+}
+
 .settings-panel {
   display: grid;
   gap: 16px;
