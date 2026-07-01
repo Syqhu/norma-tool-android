@@ -247,7 +247,7 @@ const sourceAudit = {
   ]
 };
 
-const ANDROID_APP_VERSION = "0.1.5";
+const ANDROID_APP_VERSION = "0.1.6";
 
 if (!window.zzzApp) {
   window.zzzApp = {
@@ -481,6 +481,7 @@ const el = {
   rankFilters: document.querySelector("#rankFilters"),
   ownershipFilters: document.querySelector("#ownershipFilters"),
   dailyList: document.querySelector("#dailyList"),
+  dailyStamina: document.querySelector("#dailyStaminaPanel"),
   detectDaily: document.querySelector("#detectDailyBtn"),
   notifyNow: document.querySelector("#notifyNowBtn"),
   notificationToggle: document.querySelector("#notificationToggle"),
@@ -2945,6 +2946,37 @@ function renderDaily() {
     el.dailyList.appendChild(row);
   });
   updateDailyStatus();
+  updateDailyStaminaPanel();
+}
+
+function formatDurationSeconds(seconds) {
+  const total = Math.max(0, Number(seconds || 0));
+  if (!total) return "";
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.ceil((total % 3600) / 60);
+  if (hours <= 0) return `${minutes}分`;
+  if (minutes <= 0 || minutes === 60) return `${hours + (minutes === 60 ? 1 : 0)}時間`;
+  return `${hours}時間${minutes}分`;
+}
+
+function updateDailyStaminaPanel() {
+  if (!el.dailyStamina) return;
+  const energy = state.daily.hoyolab?.energy;
+  if (!energy) {
+    el.dailyStamina.innerHTML = `<span>現在の活性</span><strong>未取得</strong><em>HoYoLAB完了検知で更新します</em>`;
+    return;
+  }
+  const current = Number(energy.current ?? 0);
+  const max = Number(energy.max ?? 0);
+  const percent = max > 0 ? Math.min(100, Math.max(0, Math.round(current / max * 100))) : 0;
+  const restore = formatDurationSeconds(energy.restore);
+  const note = current >= max && max > 0 ? "満タンです" : restore ? `満タンまで約 ${restore}` : "回復時間は未取得";
+  el.dailyStamina.innerHTML = `
+    <span>現在の活性</span>
+    <strong>${current}/${max || "?"}</strong>
+    <em>${note}</em>
+    <i style="--value:${percent}%"><b></b></i>
+  `;
 }
 
 function dailyDetectionSummary(note) {
@@ -2975,6 +3007,8 @@ function applyDailyDetection(note) {
   state.daily.hoyolab = {
     checkedAt: daily.checkedAt || new Date().toISOString(),
     summary: dailyDetectionSummary(note),
+    energy: daily.energy || null,
+    vitality: daily.vitality || null,
     applied
   };
   saveDailyState();
