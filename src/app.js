@@ -247,7 +247,7 @@ const sourceAudit = {
   ]
 };
 
-const ANDROID_APP_VERSION = "0.1.3";
+const ANDROID_APP_VERSION = "0.1.4";
 
 if (!window.zzzApp) {
   window.zzzApp = {
@@ -297,8 +297,15 @@ if (!window.zzzApp) {
         currentVersion: ANDROID_APP_VERSION,
         latestVersion,
         tagName: release?.tag_name || "",
+        name: release?.name || release?.tag_name || "",
         releaseUrl: release?.html_url || "https://github.com/Syqhu/norma-tool-android/releases",
-        publishedAt: release?.published_at || ""
+        publishedAt: release?.published_at || "",
+        body: release?.body || "",
+        assets: (release?.assets || []).map((asset) => ({
+          name: asset.name || "",
+          url: asset.browser_download_url || "",
+          size: asset.size || 0
+        }))
       };
     },
     openExternalUrl: async (url) => {
@@ -474,6 +481,7 @@ const el = {
   dailyList: document.querySelector("#dailyList"),
   notifyNow: document.querySelector("#notifyNowBtn"),
   notificationToggle: document.querySelector("#notificationToggle"),
+  notificationTime: document.querySelector("#notificationTimeInput"),
   autoUpdateToggle: document.querySelector("#autoUpdateToggle"),
   appUpdateToggle: document.querySelector("#appUpdateToggle"),
   autoBackupToggle: document.querySelector("#autoBackupToggle"),
@@ -517,6 +525,7 @@ function loadSettings() {
   const saved = readJsonStorage("settings", {});
   return {
     notifyDaily: saved.notifyDaily ?? true,
+    notifyTime: saved.notifyTime || "21:00",
     autoUpdate: saved.autoUpdate ?? true,
     appUpdate: saved.appUpdate ?? true,
     autoBackup: saved.autoBackup ?? true
@@ -1150,11 +1159,11 @@ function discScoreDetail(profile, disc) {
     score += 30;
     parts.push({ label: `推奨メイン ${discMain}`, value: 30 });
   } else if (discMain) {
-    score -= 12;
-    parts.push({ label: `非推奨メイン ${discMain}`, value: -12 });
-  } else if (flexibleSlot) {
     score -= 6;
-    parts.push({ label: "メイン未入力", value: -6 });
+    parts.push({ label: `非推奨メイン ${discMain}`, value: -6 });
+  } else if (flexibleSlot) {
+    score -= 3;
+    parts.push({ label: "メイン未入力", value: -3 });
   }
   let effectiveSubstats = 0;
   for (const sub of subs) {
@@ -1173,25 +1182,25 @@ function discScoreDetail(profile, disc) {
     parts.push({ label: "サブステ情報不足", value: -penalty });
   }
   if (effectiveSubstats === 0 && subs.length) {
-    score -= 18;
-    parts.push({ label: "有効サブステなし", value: -18 });
+    score -= 10;
+    parts.push({ label: "有効サブステなし", value: -10 });
   } else if (effectiveSubstats === 1 && subs.length >= 3) {
-    score -= 8;
-    parts.push({ label: "有効サブステ1枠のみ", value: -8 });
+    score -= 4;
+    parts.push({ label: "有効サブステ1枠のみ", value: -4 });
   }
   if (setMatched) {
     score += 7;
     parts.push({ label: `推奨セット ${disc.set}`, value: 7 });
   } else if (disc.set) {
-    score -= 4;
-    parts.push({ label: `非推奨セット ${disc.set}`, value: -4 });
+    score -= 2;
+    parts.push({ label: `非推奨セット ${disc.set}`, value: -2 });
   }
   return { score: Math.max(0, Math.min(score, 100)), rawScore: score, parts };
 }
 
 function discGrade(score) {
-  if (score >= 82) return "採用";
-  if (score >= 64) return "保留";
+  if (score >= 78) return "採用";
+  if (score >= 58) return "保留";
   return "交換候補";
 }
 
@@ -1309,9 +1318,9 @@ function classifyDiscForCharacter(character, profile, disc) {
   const filled = normalizedSubstats(disc).length;
   const total = score + fit.score;
   if (!disc.set && !disc.main && filled === 0) return { grade: "未入力", reason: "ディスク情報がありません", total };
-  if ((total >= 112 && score >= 84) || score >= 92) return { grade: "神個体", reason: `スコア${score} / ${fit.label}`, total };
-  if (score >= 82) return { grade: "採用", reason: `スコア${score} / ${fit.label}`, total };
-  if (total >= 82 || score >= 64 || fit.score >= 24) return { grade: "保留", reason: `更新候補と比較。${fit.label}`, total };
+  if ((total >= 110 && score >= 82) || score >= 90) return { grade: "神個体", reason: `スコア${score} / ${fit.label}`, total };
+  if (score >= 78) return { grade: "採用", reason: `スコア${score} / ${fit.label}`, total };
+  if (total >= 78 || score >= 58 || fit.score >= 22) return { grade: "保留", reason: `更新候補と比較。${fit.label}`, total };
   return { grade: "餌候補", reason: `スコア${score}。主力候補から外れます`, total };
 }
 
@@ -2259,6 +2268,8 @@ function teamSynergy(items) {
   const hasStun = roles.includes("撃破");
   const hasAnomalyPair = (roleCounts.異常 || 0) >= 2;
   const hasRuptureCore = roles.includes("命破");
+  const hasBurstWindow = hasStun && (roles.includes("強攻") || roles.includes("命破"));
+  const hasQuickSupport = roles.includes("支援") || roles.includes("防護");
   const sameElementLinks = Object.entries(elementCounts).filter(([element, count]) => element !== "不明" && count >= 2);
   const sameCampLinks = Object.entries(campCounts).filter(([camp, count]) => Number(camp) && count >= 2);
   const archetype = teamArchetype(items, roleCounts);
@@ -2270,7 +2281,9 @@ function teamSynergy(items) {
     Math.min(8, sameElementLinks.length * 4 + sameCampLinks.length * 4),
     Math.min(16, fit.reduce((sum, item) => sum + item.score, 0)),
     dps.length === 1 ? 8 : dps.length === 2 ? 3 : 0,
-    hasSupport ? 7 : 0
+    hasSupport ? 7 : 0,
+    hasBurstWindow ? 6 : 0,
+    hasQuickSupport && anchor ? 5 : 0
   ];
   const penalties = [];
   if (anchor) notes.push(`主軸: ${anchor.name} / ${anchor.role}。理想型: ${archetype.ideal}`);
@@ -2938,8 +2951,18 @@ function updateDailyStatus() {
   el.dailyStatus.textContent = left ? `未完了 ${left}件` : "デイリー完了";
 }
 
+function isDailyNotifyTime() {
+  const [hour, minute] = String(state.settings.notifyTime || "21:00").split(":").map((value) => Number(value));
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return true;
+  const now = new Date();
+  const scheduled = new Date(now);
+  scheduled.setHours(hour, minute, 0, 0);
+  return now >= scheduled;
+}
+
 async function notifyIfDailyIncomplete({ force = false } = {}) {
   if (!state.settings.notifyDaily && !force) return;
+  if (!force && !isDailyNotifyTime()) return;
   const left = incompleteDailyTasks();
   if (!left.length) return;
   const nowKey = todayKey();
@@ -2993,6 +3016,12 @@ async function checkAppUpdate({ silent = false } = {}) {
   } catch (error) {
     if (!silent) setAppUpdateStatus(`確認に失敗: ${error.message || error}`);
     return null;
+  }
+  if (hasBurstWindow && hasQuickSupport) {
+    notes.push("ブレイク窓と支援/防護がそろっています。主軸へバフを集める形で評価を加点しています。");
+  }
+  if (anchor && hasQuickSupport) {
+    notes.push(`${anchor.name}へクイック支援/防護支援を回しやすい構成です。`);
   }
 }
 
@@ -3205,8 +3234,9 @@ function collectBackupStorage() {
 
 function buildLocalBackupPayload() {
   return {
-    schema: "norma-tool-android-backup",
+    schema: "norma-tool-backup",
     version: 1,
+    platform: "android",
     exportedAt: new Date().toISOString(),
     appVersion: ANDROID_APP_VERSION,
     storage: collectBackupStorage()
@@ -3343,6 +3373,29 @@ function applyHoyolabSync(result) {
   return { matched, statCount, discCount, unmatched, diff };
 }
 
+function previewHoyolabSync(result) {
+  let matched = 0;
+  let newOwned = 0;
+  let statCount = 0;
+  let discCount = 0;
+  const names = [];
+  const unmatched = [];
+  for (const item of result.characters || []) {
+    const character = hoyolabCharacterMatch(item);
+    if (!character) {
+      unmatched.push(item.name || item.id || "unknown");
+      continue;
+    }
+    matched += 1;
+    names.push(character.name);
+    const data = loadComparisonState(character);
+    if (!data.ownership.owned) newOwned += 1;
+    statCount += Object.entries(item.stats || {}).filter(([key, value]) => statByKey[key] && value !== "").length;
+    discCount += (item.discs || []).filter((disc) => discSlots.includes(Number(disc.slot))).length;
+  }
+  return { matched, newOwned, statCount, discCount, names, unmatched };
+}
+
 function setHoyolabStatus(message) {
   if (el.hoyolabStatus) el.hoyolabStatus.textContent = message;
 }
@@ -3375,10 +3428,26 @@ async function syncHoyolab() {
   setHoyolabStatus("HoYoLABから所持キャラ・ステータス・ディスクを同期中です。");
   try {
     const result = await window.zzzApp.hoyolabSync();
-    const applied = applyHoyolabSync(result);
+    const preview = previewHoyolabSync(result);
     const account = result.role?.nickname ? `${result.role.nickname} / UID ${result.role.uid}` : `UID ${result.role?.uid || "不明"}`;
+    const ok = window.confirm([
+      `${account} の同期内容を確認してください。`,
+      `一致キャラ: ${preview.matched}名`,
+      `新規所持: ${preview.newOwned}名`,
+      `ステータス: ${preview.statCount}項目`,
+      `ディスク: ${preview.discCount}枚`,
+      preview.unmatched.length ? `未一致: ${preview.unmatched.slice(0, 6).join(" / ")}` : "",
+      "",
+      "この内容をローカルデータへ反映しますか？"
+    ].filter(Boolean).join("\n"));
+    if (!ok) {
+      setHoyolabStatus(`同期レビューでキャンセルしました。取得: ${preview.matched}名 / ディスク${preview.discCount}枚`);
+      return;
+    }
+    const applied = applyHoyolabSync(result);
     setHoyolabStatus(`${account}: ${applied.matched}名同期、ステータス${applied.statCount}項目、ディスク${applied.discCount}枚を反映しました。`);
   } catch (error) {
+    saveSyncFailure(error);
     setHoyolabStatus(`同期に失敗: ${error.message || error}`);
   }
 }
@@ -3424,6 +3493,8 @@ function saveSyncDiff(before, after, result) {
     date: new Date().toISOString(),
     account: result.role?.nickname || "",
     uid: result.role?.uid || "",
+    status: "success",
+    matched: Number(result.characters?.length || 0),
     changes: changes.slice(0, 40)
   };
   const history = [entry, ...readJsonStorage("hoyolabSyncHistory", [])].slice(0, 10);
@@ -3433,6 +3504,19 @@ function saveSyncDiff(before, after, result) {
 
 function loadSyncHistory() {
   return readJsonStorage("hoyolabSyncHistory", []);
+}
+
+function saveSyncFailure(error) {
+  const entry = {
+    date: new Date().toISOString(),
+    account: "",
+    uid: "",
+    status: "failed",
+    changes: [`同期失敗: ${error.message || error}`]
+  };
+  const history = [entry, ...loadSyncHistory()].slice(0, 10);
+  localStorage.setItem("hoyolabSyncHistory", JSON.stringify(history));
+  renderAccountDashboard();
 }
 
 function growthPriorityRows() {
@@ -3511,8 +3595,8 @@ function setupChecklist() {
   const ownedCount = state.characters.filter((character) => loadComparisonState(character).ownership.owned).length;
   return [
     { label: "キャラデータ更新", done: state.characters.length > 0, note: `${state.characters.length}名` },
-    { label: isAndroidBeta ? "所持キャラ登録" : "HoYoLAB同期", done: ownedCount > 0, note: ownedCount ? `所持 ${ownedCount}名` : (isAndroidBeta ? "手入力待ち" : "未同期") },
-    { label: "通知設定", done: state.settings.notifyDaily, note: state.settings.notifyDaily ? "ON" : "OFF" },
+    { label: "HoYoLAB同期", done: ownedCount > 0, note: ownedCount ? `所持 ${ownedCount}名` : "未同期" },
+    { label: "通知設定", done: state.settings.notifyDaily, note: state.settings.notifyDaily ? `${state.settings.notifyTime || "21:00"}` : "OFF" },
     { label: "アップデート確認", done: state.settings.appUpdate, note: state.settings.appUpdate ? "ON" : "OFF" },
     { label: "自動バックアップ", done: state.settings.autoBackup, note: state.settings.autoBackup ? "ON" : "OFF" }
   ];
@@ -3538,7 +3622,7 @@ function renderSetupPanel() {
     <div class="button-row">
       <button class="pill-button" id="setupRefreshDataBtn">データ更新</button>
       <button class="pill-button" id="setupCheckUpdateBtn">更新確認</button>
-      ${isAndroidBeta ? "" : `<button class="pill-button primary" id="setupHoyolabBtn">HoYoLABログイン</button>`}
+      <button class="pill-button primary" id="setupHoyolabBtn">HoYoLABログイン</button>
     </div>
   `;
   el.setupPanel.querySelector("#setupRefreshDataBtn")?.addEventListener("click", async () => {
@@ -3565,11 +3649,19 @@ function bindEvents() {
   });
   el.notifyNow.addEventListener("click", () => notifyIfDailyIncomplete({ force: true }));
   el.notificationToggle.checked = state.settings.notifyDaily;
+  if (el.notificationTime) el.notificationTime.value = state.settings.notifyTime || "21:00";
   el.autoUpdateToggle.checked = state.settings.autoUpdate;
   el.appUpdateToggle.checked = state.settings.appUpdate;
   if (el.autoBackupToggle) el.autoBackupToggle.checked = state.settings.autoBackup;
   el.notificationToggle.addEventListener("change", () => {
     state.settings.notifyDaily = el.notificationToggle.checked;
+    saveSettings();
+    renderSetupPanel();
+  });
+  el.notificationTime?.addEventListener("change", () => {
+    state.settings.notifyTime = el.notificationTime.value || "21:00";
+    state.daily.lastNotified = "";
+    saveDailyState();
     saveSettings();
     renderSetupPanel();
   });

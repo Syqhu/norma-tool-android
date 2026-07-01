@@ -1807,6 +1807,29 @@ h3 {
     padding: 18px;
   }
 
+  .button-row,
+  .hoyolab-panel .button-row,
+  .update-panel .button-row,
+  .backup-panel .button-row {
+    flex-wrap: wrap;
+  }
+
+  .pill-button {
+    min-height: 42px;
+  }
+
+  .select-line {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .hoyolab-panel,
+  .update-panel,
+  .backup-panel,
+  .filters {
+    padding: 16px;
+  }
+
   #teamView {
     height: auto;
   }
