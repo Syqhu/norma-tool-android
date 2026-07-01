@@ -249,6 +249,7 @@ const sourceAudit = {
 
 if (!window.zzzApp) {
   window.zzzApp = {
+    platform: "android",
     notifyDailyIncomplete: async (payload) => {
       if (!("Notification" in window)) return false;
       if (Notification.permission === "default") await Notification.requestPermission();
@@ -295,6 +296,7 @@ if (!window.zzzApp) {
     hoyolabDisconnect: async () => ({ loggedIn: false, cookieCount: 0 })
   };
 }
+const isAndroidBeta = window.zzzApp?.platform === "android";
 const profileIdAliases = {
   1011: "Anby",
   1021: "Nekomata",
@@ -431,6 +433,10 @@ const el = {
   hoyolabStatus: document.querySelector("#hoyolabStatus"),
   appInfo: document.querySelector("#appInfo")
 };
+
+if (isAndroidBeta) {
+  document.body.classList.add("android-beta");
+}
 
 function todayKey() {
   const d = new Date();
@@ -1169,7 +1175,7 @@ function buildDiagnosis(character, profile, data) {
     : 0;
   const notes = [];
   if (shortages.length) notes.push(`${shortages[0].key ? statLabel(shortages[0].key) : "主要ステータス"}が最優先です。${statValueText(shortages[0].gap, shortages[0].key)}不足しています。`);
-  if (blankTargets.length) notes.push(`${blankTargets.map((item) => statLabel(item.key)).join(" / ")}の現在値が未入力です。画像OCRか手入力で診断精度が上がります。`);
+  if (blankTargets.length) notes.push(`${blankTargets.map((item) => statLabel(item.key)).join(" / ")}の現在値が未入力です。${isAndroidBeta ? "手入力" : "画像OCRか手入力"}で診断精度が上がります。`);
   if (weakDiscs.length) notes.push(`${weakDiscs.map((item) => `${item.disc.slot}番`).join(" / ")}ディスクが交換候補です。`);
   if (!profile.verified) notes.push("このキャラの目標は未確認寄りです。手入力目標を併用してください。");
   if (!notes.length) notes.push(`${character.name}は入力範囲では大きな穴が少ない状態です。サブステ数値の伸びを詰めてください。`);
@@ -1549,7 +1555,7 @@ function renderStatsTab(profile, data) {
           <h2>目標ステータス比較</h2>
         </div>
         <div class="button-row">
-          <button class="pill-button" id="statImageImportBtn">画像から取得</button>
+          ${isAndroidBeta ? "" : `<button class="pill-button" id="statImageImportBtn">画像から取得</button>`}
           <button class="pill-button primary" id="saveCompareBtn">保存して再計算</button>
         </div>
       </div>
@@ -1595,7 +1601,7 @@ function renderDiscsTab(profile, data) {
           <h2>ディスク入力と交換候補</h2>
         </div>
         <div class="button-row">
-          <button class="pill-button" id="discImageImportBtn">ディスク画像から取得</button>
+          ${isAndroidBeta ? "" : `<button class="pill-button" id="discImageImportBtn">ディスク画像から取得</button>`}
           <button class="pill-button" id="saveDiscHistoryBtn">履歴保存</button>
           <button class="pill-button" id="saveDiscsWarehouseBtn">倉庫へ保存</button>
           <button class="pill-button" id="clearCompareBtn">入力をクリア</button>
@@ -1647,7 +1653,7 @@ function renderDiagnosisTab(character, profile, data) {
             <p class="eyebrow">Build Diagnosis</p>
             <h2>ビルド診断</h2>
           </div>
-          <button class="pill-button primary" id="saveBuildCardBtn">ビルドカード保存</button>
+          ${isAndroidBeta ? "" : `<button class="pill-button primary" id="saveBuildCardBtn">ビルドカード保存</button>`}
         </div>
         <div class="summary-grid">
           <div class="summary-card"><span>ディスク平均</span><strong>${diagnosis.avgDisc}</strong><em>${diagnosis.avgDisc >= 72 ? "良好" : "更新余地あり"}</em></div>
@@ -1685,7 +1691,7 @@ function renderDiagnosisTab(character, profile, data) {
         </div>
         <div class="analysis-box compact-db">
           <strong>ビルド履歴</strong>
-          <ul>${buildHistory.length ? buildHistory.slice(0, 6).map((item) => `<li>${escapeHtml(new Date(item.date).toLocaleString("ja-JP"))} / ${escapeHtml(item.source)} / 平均${item.avgDisc}</li>`).join("") : "<li>履歴なし。HoYoLAB同期で自動保存されます。</li>"}</ul>
+          <ul>${buildHistory.length ? buildHistory.slice(0, 6).map((item) => `<li>${escapeHtml(new Date(item.date).toLocaleString("ja-JP"))} / ${escapeHtml(item.source)} / 平均${item.avgDisc}</li>`).join("") : `<li>履歴なし。${isAndroidBeta ? "履歴保存ボタンで記録できます。" : "HoYoLAB同期で自動保存されます。"}</li>`}</ul>
         </div>
       </div>
     </section>
@@ -3132,7 +3138,7 @@ function setupChecklist() {
   const ownedCount = state.characters.filter((character) => loadComparisonState(character).ownership.owned).length;
   return [
     { label: "キャラデータ更新", done: state.characters.length > 0, note: `${state.characters.length}名` },
-    { label: "HoYoLAB同期", done: ownedCount > 0, note: ownedCount ? `所持 ${ownedCount}名` : "未同期" },
+    { label: isAndroidBeta ? "所持キャラ登録" : "HoYoLAB同期", done: ownedCount > 0, note: ownedCount ? `所持 ${ownedCount}名` : (isAndroidBeta ? "手入力待ち" : "未同期") },
     { label: "通知設定", done: state.settings.notifyDaily, note: state.settings.notifyDaily ? "ON" : "OFF" },
     { label: "アップデート確認", done: state.settings.appUpdate, note: state.settings.appUpdate ? "ON" : "OFF" }
   ];
@@ -3158,7 +3164,7 @@ function renderSetupPanel() {
     <div class="button-row">
       <button class="pill-button" id="setupRefreshDataBtn">データ更新</button>
       <button class="pill-button" id="setupCheckUpdateBtn">更新確認</button>
-      <button class="pill-button primary" id="setupHoyolabBtn">HoYoLABログイン</button>
+      ${isAndroidBeta ? "" : `<button class="pill-button primary" id="setupHoyolabBtn">HoYoLABログイン</button>`}
     </div>
   `;
   el.setupPanel.querySelector("#setupRefreshDataBtn")?.addEventListener("click", async () => {
