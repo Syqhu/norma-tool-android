@@ -247,28 +247,55 @@ const sourceAudit = {
   ]
 };
 
+const ANDROID_APP_VERSION = "0.1.2";
+
 if (!window.zzzApp) {
   window.zzzApp = {
     platform: "android",
     notifyDailyIncomplete: async (payload) => {
-      if (!("Notification" in window)) return false;
-      if (Notification.permission === "default") await Notification.requestPermission();
-      if (Notification.permission !== "granted") return false;
-      new Notification(payload?.title || "norma tool", { body: payload?.body || "" });
-      return true;
+      const plugin = window.Capacitor?.Plugins?.LocalNotifications;
+      if (plugin) {
+        const permission = await plugin.requestPermissions();
+        if (permission.display !== "granted") return false;
+        await plugin.createChannel?.({
+          id: "daily",
+          name: "norma tool",
+          description: "デイリー通知",
+          importance: 4,
+          visibility: 1
+        }).catch(() => {});
+        await plugin.schedule({
+          notifications: [{
+            id: Date.now() % 2147483647,
+            title: payload?.title || "norma tool",
+            body: payload?.body || "",
+            schedule: { at: new Date(Date.now() + 500) },
+            channelId: "daily"
+          }]
+        });
+        return true;
+      }
+      if ("Notification" in window) {
+        if (Notification.permission === "default") await Notification.requestPermission();
+        if (Notification.permission !== "granted") return false;
+        new Notification(payload?.title || "norma tool", { body: payload?.body || "" });
+        return true;
+      }
+      return false;
     },
     getAppInfo: async () => ({
-      version: "Android beta",
+      version: `${ANDROID_APP_VERSION} Android beta`,
       dataPath: "この端末のアプリ内保存"
     }),
     checkAppUpdate: async () => {
       const response = await fetch("https://api.github.com/repos/Syqhu/norma-tool-android/releases?per_page=20");
       const releases = await response.json();
       const release = (Array.isArray(releases) ? releases : []).find((item) => !item.draft);
+      const latestVersion = String(release?.tag_name || "").replace(/^v/i, "");
       return {
-        hasUpdate: false,
-        currentVersion: "Android beta",
-        latestVersion: release?.tag_name || "",
+        hasUpdate: compareVersionText(latestVersion, ANDROID_APP_VERSION) > 0,
+        currentVersion: ANDROID_APP_VERSION,
+        latestVersion,
         tagName: release?.tag_name || "",
         releaseUrl: release?.html_url || "https://github.com/Syqhu/norma-tool-android/releases",
         publishedAt: release?.published_at || ""
@@ -288,15 +315,41 @@ if (!window.zzzApp) {
     saveBuildCard: async () => {
       throw new Error("Android betaではビルドカード保存はまだ未対応です。");
     },
-    hoyolabLogin: async () => ({ loggedIn: false, cookieCount: 0 }),
-    hoyolabStatus: async () => ({ loggedIn: false, cookieCount: 0 }),
-    hoyolabSync: async () => {
-      throw new Error("Android betaではHoYoLAB同期はまだ未対応です。PC版で同期してください。");
-    },
-    hoyolabDisconnect: async () => ({ loggedIn: false, cookieCount: 0 })
+    hoyolabLogin: async () => window.Capacitor?.Plugins?.HoyolabAuth?.login?.() || ({ loggedIn: false, cookieCount: 0 }),
+    hoyolabStatus: async () => window.Capacitor?.Plugins?.HoyolabAuth?.status?.() || ({ loggedIn: false, cookieCount: 0 }),
+    hoyolabSync: () => androidHoyolabSync(),
+    hoyolabDisconnect: async () => window.Capacitor?.Plugins?.HoyolabAuth?.disconnect?.() || ({ loggedIn: false, cookieCount: 0 })
   };
 }
 const isAndroidBeta = window.zzzApp?.platform === "android";
+const hoyolabBattleRecordUrl = "https://act.hoyolab.com/app/zzz-game-record/index.html?lang=ja-jp";
+const hoyolabApiBase = "https://sg-act-public-api.hoyolab.com/event/game_record_zzz";
+const hoyolabRoleEndpoints = [
+  "https://api-os-takumi.hoyoverse.com/binding/api/getUserGameRolesByCookie",
+  "https://api-os-takumi.hoyolab.com/binding/api/getUserGameRolesByCookie"
+];
+const hoyolabStatMap = [
+  { key: "critDmg", patterns: [/会心ダメージ/i, /会心ダメ/i, /CRIT DMG/i, /Crit DMG/i] },
+  { key: "critRate", patterns: [/会心率/i, /CRIT Rate/i, /Crit Rate/i] },
+  { key: "anomalyProf", patterns: [/異常掌握/i, /Anomaly Proficiency/i] },
+  { key: "ap", patterns: [/異常マスタリー/i, /Anomaly Mastery/i] },
+  { key: "penRatio", patterns: [/貫通率/i, /PEN Ratio/i] },
+  { key: "impact", patterns: [/衝撃力/i, /Impact/i] },
+  { key: "energy", patterns: [/エネルギー自動回復/i, /Energy Regen/i] },
+  { key: "atk", patterns: [/攻撃力/i, /^ATK$/i] },
+  { key: "def", patterns: [/防御力/i, /^DEF$/i] },
+  { key: "hp", patterns: [/^HP$/i] }
+];
+
+function compareVersionText(a, b) {
+  const parse = (value) => String(value || "").replace(/^v/i, "").split("-")[0].split(".").map((part) => Number.parseInt(part, 10) || 0);
+  const left = parse(a);
+  const right = parse(b);
+  for (let i = 0; i < 3; i += 1) {
+    if ((left[i] || 0) !== (right[i] || 0)) return (left[i] || 0) > (right[i] || 0) ? 1 : -1;
+  }
+  return 0;
+}
 const profileIdAliases = {
   1011: "Anby",
   1021: "Nekomata",
@@ -2953,6 +3006,189 @@ async function openLatestRelease() {
   }
 }
 
+function hoyolabHeaders(cookieHeader, extra = {}) {
+  return {
+    "accept": "application/json, text/plain, */*",
+    "cookie": cookieHeader,
+    "origin": "https://act.hoyolab.com",
+    "referer": hoyolabBattleRecordUrl,
+    "user-agent": "Mozilla/5.0 norma-tool-android",
+    "x-rpc-language": "ja-jp",
+    "x-rpc-lang": "ja-jp",
+    "x-rpc-platform": "4",
+    "x-rpc-page": "/zzz",
+    ...extra
+  };
+}
+
+async function androidHoyolabGet(url, cookieHeader) {
+  const http = window.Capacitor?.Plugins?.CapacitorHttp;
+  if (!http?.get) throw new Error("Android HTTPプラグインを利用できません。");
+  const response = await http.get({ url, headers: hoyolabHeaders(cookieHeader), responseType: "json" });
+  const data = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+  if (response.status && response.status >= 400) throw new Error(data?.message || `HoYoLAB HTTP ${response.status}`);
+  return data;
+}
+
+async function androidFetchHoyolabRoles(cookieHeader) {
+  let lastError;
+  for (const endpoint of hoyolabRoleEndpoints) {
+    try {
+      const json = await androidHoyolabGet(`${endpoint}?game_biz=nap_global`, cookieHeader);
+      if (json.retcode === 0) return json.data?.list || [];
+      lastError = new Error(json.message || `retcode ${json.retcode}`);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error("HoYoLABのゲームロール取得に失敗しました。");
+}
+
+function zzzRoleFromRoles(roles) {
+  return (roles || []).find((role) => /nap/i.test(role.game_biz || "") || role.region || role.game_uid) || null;
+}
+
+function numberFromHoyolab(value) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") {
+    return numberFromHoyolab(value.formatted_value ?? value.format_value ?? value.display_value ?? value.value_text ?? value.value_str ?? value.final_value ?? value.value ?? value.val ?? value.final ?? value.base ?? value.add);
+  }
+  const text = String(value).replace(/,/g, "");
+  const match = text.match(/-?\d+(?:\.\d+)?/);
+  return match ? match[0] : "";
+}
+
+function hoyolabDisplayValue(item) {
+  if (!item || typeof item !== "object") return item;
+  return item.formatted_value ?? item.format_value ?? item.display_value ?? item.value_text ?? item.value_str ?? item.final_value ?? item.value ?? item.val ?? item.final ?? item.base;
+}
+
+function hoyolabPropertyValue(item) {
+  if (!item || typeof item !== "object") return item;
+  return item.base ?? item.formatted_value ?? item.format_value ?? item.display_value ?? item.value_text ?? item.value_str ?? item.final_value ?? item.value ?? item.val ?? item.final;
+}
+
+function statKeyFromHoyolabLabel(label) {
+  const text = String(label || "").trim();
+  if (!text) return "";
+  const matched = hoyolabStatMap.find((item) => item.patterns.some((pattern) => pattern.test(text)));
+  return matched?.key || "";
+}
+
+function collectHoyolabStatObjects(value, depth = 0, result = []) {
+  if (!value || depth > 4) return result;
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectHoyolabStatObjects(item, depth + 1, result));
+    return result;
+  }
+  if (typeof value !== "object") return result;
+  const label = value.name || value.title || value.label || value.property_name || value.full_name || value.base_name;
+  const rawValue = hoyolabDisplayValue(value);
+  if (label && rawValue !== undefined) result.push({ label, value: rawValue });
+  for (const key of ["properties", "property_list", "attrs", "attribute_list", "final_properties", "base_properties"]) {
+    if (value[key]) collectHoyolabStatObjects(value[key], depth + 1, result);
+  }
+  return result;
+}
+
+function normalizeHoyolabStats(avatar) {
+  const stats = {};
+  for (const item of collectHoyolabStatObjects(avatar)) {
+    const key = statKeyFromHoyolabLabel(item.label);
+    const value = numberFromHoyolab(item.value);
+    if (key && value !== "") stats[key] = value;
+  }
+  return stats;
+}
+
+function normalizeHoyolabSubstat(item) {
+  if (!item) return { name: "", value: "" };
+  const name = item.property_name || item.name || item.title || item.label || item.full_name || item.stat || "";
+  return { name, value: numberFromHoyolab(hoyolabPropertyValue(item)) };
+}
+
+function normalizeHoyolabDisc(item) {
+  const slot = Number(item.equipment_type || item.pos || item.slot || item.index || item.id || 0);
+  const main = item.main_property || item.main_properties?.[0] || item.main_stat || item.main || {};
+  const substats = item.properties || item.sub_properties || item.substats || item.secondary_properties || [];
+  return {
+    slot: slot >= 1 && slot <= 6 ? slot : null,
+    set: item.equip_suit?.name || item.suit?.name || item.set?.name || item.set_name || "",
+    main: normalizeHoyolabSubstat(main).name || item.main_property_name || "",
+    substats: Array.from({ length: 4 }, (_, i) => normalizeHoyolabSubstat(substats[i]))
+  };
+}
+
+function normalizeHoyolabAvatar(raw) {
+  const avatar = raw?.avatar_list?.[0] || raw || {};
+  const id = Number(avatar.id || avatar.avatar_id || avatar.template_id || avatar.role_id || 0);
+  const equip = avatar.equip || avatar.equipment || avatar.drive_disc || avatar.drive_discs || avatar.equipments || [];
+  return {
+    id,
+    name: avatar.name || avatar.full_name || avatar.avatar_name || "",
+    level: Number(avatar.level || avatar.lv || 0),
+    mindscape: Number(avatar.rank || avatar.mindscape || avatar.talent_num || avatar.unlocked_talent_num || 0),
+    weapon: avatar.weapon?.name || avatar.weapon_name || "",
+    weaponRank: Number(avatar.weapon?.star || avatar.weapon?.rank || avatar.weapon_refine || 1),
+    stats: normalizeHoyolabStats(avatar),
+    discs: Array.isArray(equip) ? equip.map(normalizeHoyolabDisc).filter((disc) => disc.slot) : [],
+    raw: avatar
+  };
+}
+
+async function androidFetchHoyolabZzzData(role, cookieHeader) {
+  const roleId = role.game_uid || role.game_role_id || role.role_id;
+  const server = role.region || role.region_name || role.server;
+  if (!roleId || !server) throw new Error("ZZZのUIDまたはサーバー情報を取得できませんでした。");
+  const query = new URLSearchParams({ role_id: String(roleId), server: String(server) });
+  const basic = await androidHoyolabGet(`${hoyolabApiBase}/api/zzz/avatar/basic?${query}`, cookieHeader);
+  if (basic.retcode !== 0) throw new Error(basic.message || `avatar/basic retcode ${basic.retcode}`);
+  const avatars = basic.data?.avatar_list || [];
+  const details = [];
+  for (const avatar of avatars) {
+    const id = avatar.id || avatar.avatar_id;
+    if (!id) {
+      details.push(normalizeHoyolabAvatar(avatar));
+      continue;
+    }
+    const detailQuery = new URLSearchParams({ role_id: String(roleId), server: String(server) });
+    detailQuery.append("id_list[]", String(id));
+    detailQuery.append("need_wiki", "true");
+    try {
+      const detail = await androidHoyolabGet(`${hoyolabApiBase}/api/zzz/avatar/info?${detailQuery}`, cookieHeader);
+      details.push(normalizeHoyolabAvatar(detail.data || avatar));
+    } catch {
+      details.push(normalizeHoyolabAvatar(avatar));
+    }
+  }
+  return {
+    role: { nickname: role.nickname || role.name || "", level: role.level || "", region: server, uid: roleId },
+    characters: details,
+    rawCount: avatars.length
+  };
+}
+
+async function androidHoyolabSync() {
+  const auth = window.Capacitor?.Plugins?.HoyolabAuth;
+  if (!auth?.status) throw new Error("HoYoLABログイン機能を利用できません。");
+  const loginState = await auth.status();
+  if (!loginState.loggedIn || !loginState.cookieHeader) throw new Error("HoYoLABにログインしてから同期してください。");
+  const roles = await androidFetchHoyolabRoles(loginState.cookieHeader);
+  const role = zzzRoleFromRoles(roles);
+  if (!role) throw new Error("HoYoLABアカウントにZZZのゲームロールが見つかりませんでした。");
+  const data = await androidFetchHoyolabZzzData(role, loginState.cookieHeader);
+  return {
+    ...data,
+    accounts: roles.map((item) => ({
+      nickname: item.nickname || item.name || "",
+      uid: item.game_uid || item.game_role_id || "",
+      region: item.region || "",
+      level: item.level || "",
+      gameBiz: item.game_biz || ""
+    }))
+  };
+}
+
 function setBackupStatus(message) {
   if (el.backupStatus) el.backupStatus.textContent = message;
 }
@@ -2972,7 +3208,7 @@ function buildLocalBackupPayload() {
     schema: "norma-tool-android-backup",
     version: 1,
     exportedAt: new Date().toISOString(),
-    appVersion: "Android beta",
+    appVersion: ANDROID_APP_VERSION,
     storage: collectBackupStorage()
   };
 }

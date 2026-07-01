@@ -1691,10 +1691,6 @@ h3 {
   }
 }
 
-.android-beta .hoyolab-panel {
-  display: none;
-}
-
 @media (max-width: 760px) {
   body {
     overflow: auto;
