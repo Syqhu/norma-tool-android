@@ -1,0 +1,16 @@
+{
+  "name": "norma-tool-android",
+  "version": "0.1.0",
+  "description": "Android beta build of norma tool.",
+  "scripts": {
+    "mobile:build-web": "node scripts/build-mobile-web.js",
+    "android:sync": "npm run mobile:build-web && cap sync android",
+    "android:build:debug": "npm run android:sync && cd android && gradlew.bat assembleDebug",
+    "android:open": "npm run android:sync && cap open android"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.4.1",
+    "@capacitor/cli": "^8.4.1",
+    "@capacitor/core": "^8.4.1"
+  }
+}

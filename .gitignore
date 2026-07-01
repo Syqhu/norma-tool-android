@@ -1,0 +1,16 @@
+node_modules/
+dist/
+*.log
+.env
+.DS_Store
+Thumbs.db
+*.traineddata
+/app.js
+/main.js
+/targetData.js
+/builder-debug.yml
+mobile-www/
+android/local.properties
+android/.gradle/
+android/build/
+android/app/build/

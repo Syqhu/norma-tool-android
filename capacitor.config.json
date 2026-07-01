@@ -1,0 +1,8 @@
+{
+  "appId": "local.norma.tool",
+  "appName": "norma tool",
+  "webDir": "mobile-www",
+  "server": {
+    "androidScheme": "https"
+  }
+}

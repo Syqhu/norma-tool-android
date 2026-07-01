@@ -1,0 +1,141 @@
+﻿<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>norma tool</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body class="is-loading">
+    <div class="splash-screen" aria-hidden="true">
+      <div class="splash-orbit">
+        <img src="../assets/norma-tool-icon.webp" alt="" />
+      </div>
+      <strong>norma tool</strong>
+    </div>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand-mark" title="norma tool">
+          <img src="../assets/norma-tool-icon.webp" alt="norma tool" />
+        </div>
+        <button class="side-item active" data-view="agents" title="エージェント"><span>AG</span><em>キャラ</em></button>
+        <button class="side-item" data-view="team" title="編成"><span>TM</span><em>編成</em></button>
+        <button class="side-item" data-view="warehouse" title="ディスク倉庫"><span>DS</span><em>倉庫</em></button>
+        <button class="side-item" data-view="account" title="育成管理"><span>AC</span><em>育成</em></button>
+        <button class="side-item" data-view="daily" title="デイリー"><span>DY</span><em>日課</em></button>
+        <button class="side-item" data-view="settings" title="設定"><span>ST</span><em>設定</em></button>
+      </aside>
+
+      <main class="main">
+        <section class="hero">
+          <div>
+            <p class="eyebrow">Zenless Zone Zero</p>
+            <h1>norma tool</h1>
+            <p class="hero-sub">画像、育成方針、デイリー通知をまとめたデスクトップアプリ。</p>
+          </div>
+          <div class="status-stack">
+            <span id="dataStatus" class="status-pill">データ読込中</span>
+            <span id="dailyStatus" class="status-pill accent">デイリー確認中</span>
+          </div>
+        </section>
+
+        <section id="agentsView" class="view active">
+          <section class="glass-panel filters">
+            <label class="search-box">
+              <span>検索</span>
+              <input id="searchInput" type="search" placeholder="キャラ名、属性、特性..." />
+            </label>
+            <div class="filter-row" id="elementFilters"></div>
+            <div class="filter-row" id="roleFilters"></div>
+            <div class="filter-row" id="rankFilters"></div>
+            <div class="filter-row" id="ownershipFilters"></div>
+          </section>
+
+          <section class="content-grid">
+            <div class="card-grid" id="characterGrid"></div>
+            <aside class="detail-panel glass-panel" id="detailPanel">
+              <div class="empty-detail">キャラを選ぶと育成方針を表示します。</div>
+            </aside>
+          </section>
+        </section>
+
+        <section id="agentDetailView" class="view">
+          <section id="agentPage" class="agent-page"></section>
+        </section>
+
+        <section id="teamView" class="view">
+          <section id="teamPanel" class="glass-panel metric-panel"></section>
+        </section>
+
+        <section id="warehouseView" class="view">
+          <section id="warehousePanel" class="glass-panel metric-panel"></section>
+        </section>
+
+        <section id="accountView" class="view">
+          <section id="accountPanel" class="glass-panel metric-panel"></section>
+        </section>
+
+        <section id="dailyView" class="view">
+          <section class="glass-panel daily-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Daily Tracker</p>
+                <h2>今日のデイリー</h2>
+              </div>
+              <button id="notifyNowBtn" class="pill-button primary">未完了を通知</button>
+            </div>
+            <div id="dailyList" class="daily-list"></div>
+          </section>
+        </section>
+
+        <section id="settingsView" class="view">
+          <section class="glass-panel settings-panel">
+            <p class="eyebrow">Settings</p>
+            <h2>設定</h2>
+            <div id="setupPanel" class="setup-panel"></div>
+            <label class="toggle-line">
+              <input id="notificationToggle" type="checkbox" />
+              <span>起動時にデイリー未完了通知を出す</span>
+            </label>
+            <label class="toggle-line">
+              <input id="autoUpdateToggle" type="checkbox" />
+              <span>起動時にキャラデータを自動更新する</span>
+            </label>
+            <label class="toggle-line">
+              <input id="appUpdateToggle" type="checkbox" />
+              <span>起動時にGitHubの新しいリリースを確認する</span>
+            </label>
+            <button id="refreshDataBtn" class="pill-button">キャラデータを更新</button>
+            <div class="update-panel">
+              <div>
+                <strong>GitHubアップデート</strong>
+                <p id="appUpdateStatus" class="muted">未確認</p>
+              </div>
+              <div class="button-row">
+                <button id="checkAppUpdateBtn" class="pill-button">今すぐ確認</button>
+                <button id="openAppReleaseBtn" class="pill-button primary" disabled>リリースを開く</button>
+              </div>
+            </div>
+            <div class="hoyolab-panel">
+              <div>
+                <strong>HoYoLAB連携</strong>
+                <p id="hoyolabStatus" class="muted">未確認</p>
+              </div>
+              <div class="button-row">
+                <button id="hoyolabLoginBtn" class="pill-button">HoYoLABでログイン</button>
+                <button id="hoyolabSyncBtn" class="pill-button primary">HoYoLAB同期</button>
+                <button id="hoyolabDisconnectBtn" class="pill-button danger">連携解除</button>
+              </div>
+            </div>
+            <p id="appInfo" class="muted"></p>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <script src="./targetData.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
+
+
