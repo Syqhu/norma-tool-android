@@ -495,7 +495,8 @@ h3 {
 }
 
 .hoyolab-panel,
-.update-panel {
+.update-panel,
+.backup-panel {
   display: grid;
   gap: 14px;
   border: 1px solid rgba(100, 214, 255, 0.25);
@@ -504,14 +505,16 @@ h3 {
 }
 
 .hoyolab-panel strong,
-.update-panel strong {
+.update-panel strong,
+.backup-panel strong {
   display: block;
   margin-bottom: 4px;
   font-size: 16px;
 }
 
 .hoyolab-panel .button-row,
-.update-panel .button-row {
+.update-panel .button-row,
+.backup-panel .button-row {
   justify-content: flex-start;
 }
 

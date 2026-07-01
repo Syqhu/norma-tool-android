@@ -105,6 +105,10 @@
               <input id="appUpdateToggle" type="checkbox" />
               <span>起動時にGitHubの新しいリリースを確認する</span>
             </label>
+            <label class="toggle-line">
+              <input id="autoBackupToggle" type="checkbox" />
+              <span>起動時にローカル自動バックアップを作成する</span>
+            </label>
             <button id="refreshDataBtn" class="pill-button">キャラデータを更新</button>
             <div class="update-panel">
               <div>
@@ -125,6 +129,16 @@
                 <button id="hoyolabLoginBtn" class="pill-button">HoYoLABでログイン</button>
                 <button id="hoyolabSyncBtn" class="pill-button primary">HoYoLAB同期</button>
                 <button id="hoyolabDisconnectBtn" class="pill-button danger">連携解除</button>
+              </div>
+            </div>
+            <div class="backup-panel">
+              <div>
+                <strong>データ保護</strong>
+                <p id="backupStatus" class="muted">バックアップ未実行</p>
+              </div>
+              <div class="button-row">
+                <button id="createLocalBackupBtn" class="pill-button">今すぐバックアップ</button>
+                <button id="restoreLocalBackupBtn" class="pill-button primary">最新を復元</button>
               </div>
             </div>
             <p id="appInfo" class="muted"></p>
