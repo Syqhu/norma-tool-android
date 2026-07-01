@@ -247,7 +247,7 @@ const sourceAudit = {
   ]
 };
 
-const ANDROID_APP_VERSION = "0.1.2";
+const ANDROID_APP_VERSION = "0.1.3";
 
 if (!window.zzzApp) {
   window.zzzApp = {
