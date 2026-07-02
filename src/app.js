@@ -258,7 +258,7 @@ const sourceAudit = {
   ]
 };
 
-const ANDROID_APP_VERSION = "0.1.9";
+const ANDROID_APP_VERSION = "0.1.10";
 
 if (!window.zzzApp) {
   window.zzzApp = {
@@ -3877,9 +3877,9 @@ function growthPriorityRows() {
       const levelGap = Math.max(0, 60 - Number(data.materials.currentLevel || 1));
       const levelScore = Math.min(20, levelGap / 2);
       const shortageScore = shortages * 12;
-      const discScore = Math.max(0, 72 - discAvg);
+      const discPenaltyScore = Math.max(0, 72 - discAvg);
       const completionScore = Math.max(0, 85 - completion.total) / 3;
-      const priority = (owned ? 35 : 0) + shortageScore + discScore + levelScore + completionScore + (profile.verified ? 8 : 0);
+      const priority = (owned ? 35 : 0) + shortageScore + discPenaltyScore + levelScore + completionScore + (profile.verified ? 8 : 0);
       const reasons = [
         owned ? "所持済み" : "未所持/同期待ち",
         levelGap > 0 ? `Lv差 ${levelGap}` : "Lv完了",
@@ -3898,7 +3898,7 @@ function growthPriorityRows() {
         breakdown: {
           所持: owned ? 35 : 0,
           不足: Math.round(shortageScore),
-          ディスク: Math.round(discScore),
+          ディスク: Math.round(discPenaltyScore),
           レベル: Math.round(levelScore),
           完成度: Math.round(completionScore),
           ソース: profile.verified ? 8 : 0
