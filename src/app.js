@@ -258,7 +258,7 @@ const sourceAudit = {
   ]
 };
 
-const ANDROID_APP_VERSION = "0.1.8";
+const ANDROID_APP_VERSION = "0.1.9";
 
 if (!window.zzzApp) {
   window.zzzApp = {
@@ -4103,41 +4103,61 @@ function bindEvents() {
   el.hoyolabDisconnect?.addEventListener("click", disconnectHoyolab);
 }
 
-function finishSplash() {
-  setTimeout(() => document.body.classList.remove("is-loading"), 520);
+function finishSplash(delay = 520) {
+  setTimeout(() => document.body.classList.remove("is-loading"), delay);
+}
+
+function showStartupError(error) {
+  console.error("startup failed", error);
+  if (el.dataStatus) el.dataStatus.textContent = `起動処理の一部に失敗: ${error?.message || error}`;
 }
 
 async function init() {
-  bindEvents();
-  renderFilters();
-  renderDaily();
-  await loadCharacters();
-  renderTeamSimulator();
-  renderWarehousePanel();
-  renderAccountDashboard();
-  renderSetupPanel();
-  renderHomeDashboard();
-  if (state.characters[0]) {
-    state.selectedId = state.characters[0].id;
-    renderCharacters();
-    renderDetail(state.characters[0]);
-  }
-  setTimeout(() => notifyIfDailyIncomplete(), 1200);
-  setInterval(() => notifyIfDailyIncomplete(), 1000 * 60 * 30);
-  setInterval(() => {
-    updateDailyStaminaPanel();
+  try {
+    bindEvents();
+    renderFilters();
+    renderDaily();
+    await loadCharacters();
+    renderTeamSimulator();
+    renderWarehousePanel();
+    renderAccountDashboard();
+    renderSetupPanel();
     renderHomeDashboard();
-  }, 1000 * 60);
-  scheduleAutoDetect();
-  const info = await window.zzzApp.getAppInfo();
-  el.appInfo.textContent = `App ${info.version} / 保存先: ${info.dataPath}`;
-  if (state.settings.appUpdate) {
-    setTimeout(() => checkAppUpdate({ silent: true }), 1800);
+    if (state.characters[0]) {
+      state.selectedId = state.characters[0].id;
+      renderCharacters();
+      renderDetail(state.characters[0]);
+    }
+    setTimeout(() => notifyIfDailyIncomplete(), 1200);
+    setInterval(() => notifyIfDailyIncomplete(), 1000 * 60 * 30);
+    setInterval(() => {
+      updateDailyStaminaPanel();
+      renderHomeDashboard();
+    }, 1000 * 60);
+    scheduleAutoDetect();
+    const info = await window.zzzApp.getAppInfo();
+    el.appInfo.textContent = `App ${info.version} / 保存先: ${info.dataPath}`;
+    if (state.settings.appUpdate) {
+      setTimeout(() => checkAppUpdate({ silent: true }), 1800);
+    }
+    setTimeout(() => createAutoBackup(), 900);
+    refreshHoyolabStatus();
+  } catch (error) {
+    showStartupError(error);
+  } finally {
+    finishSplash(160);
   }
-  setTimeout(() => createAutoBackup(), 900);
-  refreshHoyolabStatus();
-  finishSplash();
 }
+
+setTimeout(() => finishSplash(0), 2800);
+window.addEventListener("error", (event) => {
+  showStartupError(event.error || event.message);
+  finishSplash(0);
+});
+window.addEventListener("unhandledrejection", (event) => {
+  showStartupError(event.reason);
+  finishSplash(0);
+});
 
 init();
 
