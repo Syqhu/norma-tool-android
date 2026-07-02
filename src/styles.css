@@ -1165,6 +1165,27 @@ h3 {
   margin: 14px 0;
 }
 
+.team-score-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.team-score-breakdown span {
+  border: 1px solid rgba(181, 124, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(8, 5, 18, 0.42);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 7px 10px;
+}
+
+.team-score-breakdown b {
+  color: var(--gold);
+}
+
 .synergy-card {
   border: 1px solid rgba(181, 124, 255, 0.22);
   border-radius: 14px;
@@ -1252,6 +1273,14 @@ h3 {
 .preset-card strong,
 .dashboard-row strong {
   display: block;
+}
+
+.dashboard-row small {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .template-card span,

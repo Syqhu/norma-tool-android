@@ -1,6 +1,6 @@
 {
   "name": "norma-tool-android",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Android beta build of norma tool.",
   "scripts": {
     "mobile:build-web": "node scripts/build-mobile-web.js",

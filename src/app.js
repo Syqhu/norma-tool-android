@@ -94,6 +94,17 @@ const characterPairSynergy = [
   { includes: ["ニコ"], elements: ["エーテル"], score: 8, note: "ニコはエーテル/集敵/防御ダウンで短時間火力に寄与します" }
 ];
 
+const teamSourceAudit = {
+  updatedAt: "2026-07-02",
+  policy: "複数ソースで共通する編成原則だけを採用。個別キャラ条件は確認済みのみ個別ルール化し、未確認は同属性/同陣営の汎用条件として扱います。",
+  sources: [
+    { name: "Game8 Additional Ability", url: "https://game8.co/games/Zenless-Zone-Zero/archives/460451", note: "追加能力は同属性/同陣営が基本。朱鳶/青衣/ジェーンなどのロール条件例を確認。" },
+    { name: "Game8 Team Building", url: "https://game8.co/games/Zenless-Zone-Zero/archives/563441", note: "追加能力確認、DPS確保、撃破+火力、異常2枚の混沌などの編成原則を確認。" },
+    { name: "Prydwen Attributes", url: "https://www.prydwen.gg/zenless/guides/agents-attributes", note: "属性/陣営で追加パッシブを発動する基本仕様を確認。" },
+    { name: "Mobalytics Teams", url: "https://mobalytics.gg/zzz/teams", note: "高難度向け実編成が主力+支援/撃破/異常相方を軸に組まれていることを確認。" }
+  ]
+};
+
 const targetData = window.ZZZ_TARGET_DATA || { stats: [], discMainOptions: [""], roleTemplates: {}, profiles: {} };
 const statByKey = Object.fromEntries(targetData.stats.map((stat) => [stat.key, stat]));
 const discSlots = [1, 2, 3, 4, 5, 6];
@@ -247,7 +258,7 @@ const sourceAudit = {
   ]
 };
 
-const ANDROID_APP_VERSION = "0.1.7";
+const ANDROID_APP_VERSION = "0.1.8";
 
 if (!window.zzzApp) {
   window.zzzApp = {
@@ -2354,12 +2365,47 @@ function teamSynergy(items) {
   return {
     score: Math.max(0, Math.min(100, rawScore)),
     notes,
+    scoreParts: {
+      archetype: archetype.score,
+      ability: Math.round((activeAbilityCount / Math.max(items.length, 1)) * 15),
+      links: Math.min(8, sameElementLinks.length * 4 + sameCampLinks.length * 4),
+      fit: Math.min(16, fit.reduce((sum, item) => sum + item.score, 0)),
+      roleBalance: dps.length === 1 ? 8 : dps.length === 2 ? 3 : 0,
+      support: hasSupport ? 7 : 0,
+      burst: hasBurstWindow ? 6 : 0,
+      assist: hasQuickSupport && anchor ? 5 : 0,
+      penalties: penalties.reduce((sum, value) => sum + value, 0)
+    },
     ability,
     anchor,
     sameElementLinks,
     sameCampLinks,
     archetype: archetype.name
   };
+}
+
+function teamMissingRoles(items, synergy) {
+  const roles = items.map((item) => item.role);
+  const missing = [];
+  if (!roles.some((role) => isDamageRole(role))) missing.push("主力火力");
+  if (!roles.includes("支援") && !roles.includes("防護")) missing.push("支援/防護");
+  if (synergy.archetype === "強攻ブレイク" && !roles.includes("撃破")) missing.push("撃破");
+  if (roles.includes("異常") && (countBy(items, "role").異常 || 0) < 2) missing.push("異常相方");
+  if (items.length < 3) missing.push(`${3 - items.length}枠`);
+  return uniqueList(missing);
+}
+
+function renderTeamSourceAudit() {
+  return `
+    <div class="analysis-box compact-db">
+      <strong>編成データ監査</strong>
+      <ul>
+        <li>更新日: ${escapeHtml(teamSourceAudit.updatedAt)}</li>
+        <li>${escapeHtml(teamSourceAudit.policy)}</li>
+        ${teamSourceAudit.sources.map((source) => `<li><a href="${escapeHtml(source.url)}" target="_blank" rel="noreferrer">${escapeHtml(source.name)}</a>: ${escapeHtml(source.note)}</li>`).join("")}
+      </ul>
+    </div>
+  `;
 }
 
 function rolePatternMatches(pattern, character) {
@@ -2476,6 +2522,7 @@ function renderTeamSimulator() {
   const orderNotes = teamOrderAdvice(selected, synergy);
   const presetMatches = contentPresetSuggestions(selected, templateMatches, synergy);
   const partnerMatches = recommendedTeamPartners(selected, synergy);
+  const missingRoles = teamMissingRoles(selected, synergy);
   const options = [`<option value="">未選択</option>`]
     .concat(state.characters.map((character) => `<option value="${character.id}">${escapeHtml(character.name)} / ${escapeHtml(character.role)} / ${escapeHtml(character.element)} / ${escapeHtml(campName(character))}</option>`))
     .join("");
@@ -2501,11 +2548,15 @@ function renderTeamSimulator() {
       <div class="summary-card"><span>選択中</span><strong>${selected.length}/3</strong><em>${selected.map((item) => escapeHtml(item.name)).join(" / ") || "未選択"}</em></div>
       <div class="summary-card"><span>追加能力</span><strong>${synergy.ability.filter((item) => item.active).length}/${selected.length || 0}</strong><em>発動中</em></div>
     </div>
+    <div class="team-score-breakdown">
+      ${Object.entries(synergy.scoreParts).map(([key, value]) => `<span>${escapeHtml(key)} <b>${value >= 0 ? "+" : ""}${value}</b></span>`).join("")}
+    </div>
+    ${missingRoles.length ? `<div class="analysis-box compact-db"><strong>不足枠</strong><p>${escapeHtml(missingRoles.join(" / "))}</p></div>` : ""}
     <div class="team-synergy-grid">
       ${synergy.ability.length ? synergy.ability.map((item) => `
         <div class="synergy-card ${item.active ? "active" : "inactive"}">
           <strong>${escapeHtml(item.character.name)}</strong>
-          <span>${item.active ? "発動" : "未発動"} / ${escapeHtml(item.requirement)}</span>
+          <span>${item.active ? "発動" : "未発動"} / ${escapeHtml(item.requirement)} / ${escapeHtml(item.source)}</span>
         </div>
       `).join("") : `<div class="synergy-card inactive"><strong>追加能力</strong><span>キャラを選択すると判定します</span></div>`}
     </div>
@@ -2558,6 +2609,7 @@ function renderTeamSimulator() {
       <strong>編成メモ</strong>
       <ul>${synergy.notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("")}</ul>
     </div>
+    ${renderTeamSourceAudit()}
   `;
   el.teamPanel.querySelectorAll("[data-team-slot]").forEach((select) => {
     select.addEventListener("change", () => {
@@ -2975,25 +3027,40 @@ function formatDurationSeconds(seconds) {
   return `${hours}時間${minutes}分`;
 }
 
+function staminaSnapshot() {
+  const energy = state.daily.hoyolab?.energy;
+  if (!energy) return null;
+  const current = Number(energy.current ?? 0);
+  const max = Number(energy.max ?? 0);
+  const elapsed = state.daily.hoyolab?.checkedAt ? Math.floor((Date.now() - new Date(state.daily.hoyolab.checkedAt).getTime()) / 1000) : 0;
+  const remaining = Math.max(0, Number(energy.restore || 0) - elapsed);
+  const percent = max > 0 ? Math.min(100, Math.max(0, Math.round(current / max * 100))) : 0;
+  const threshold = Math.max(1, Number(state.settings.staminaThreshold || 220));
+  return {
+    current,
+    max,
+    percent,
+    threshold,
+    remaining,
+    restoreText: formatDurationSeconds(remaining),
+    isFull: max > 0 && current >= max,
+    nearFull: max > 0 && current >= Math.max(threshold, Math.floor(max * 0.9))
+  };
+}
+
 function updateDailyStaminaPanel() {
   if (!el.dailyStamina) return;
-  const energy = state.daily.hoyolab?.energy;
-  if (!energy) {
+  const snap = staminaSnapshot();
+  if (!snap) {
     el.dailyStamina.innerHTML = `<span>現在の活性</span><strong>未取得</strong><em>HoYoLAB完了検知で更新します</em>`;
     return;
   }
-  const current = Number(energy.current ?? 0);
-  const max = Number(energy.max ?? 0);
-  const percent = max > 0 ? Math.min(100, Math.max(0, Math.round(current / max * 100))) : 0;
-  const elapsed = state.daily.hoyolab?.checkedAt ? Math.floor((Date.now() - new Date(state.daily.hoyolab.checkedAt).getTime()) / 1000) : 0;
-  const remaining = Math.max(0, Number(energy.restore || 0) - elapsed);
-  const restore = formatDurationSeconds(remaining);
-  const note = current >= max && max > 0 ? "満タンです" : restore ? `満タンまで約 ${restore}` : "回復時間は未取得";
+  const note = snap.isFull ? "満タンです" : snap.restoreText ? `満タンまで約 ${snap.restoreText}` : "回復時間は未取得";
   el.dailyStamina.innerHTML = `
     <span>現在の活性</span>
-    <strong>${current}/${max || "?"}</strong>
-    <em>${note}</em>
-    <i style="--value:${percent}%"><b></b></i>
+    <strong>${snap.current}/${snap.max || "?"}</strong>
+    <em>${note} / 通知 ${snap.threshold}+</em>
+    <i style="--value:${snap.percent}%"><b></b></i>
   `;
 }
 
@@ -3043,8 +3110,7 @@ function renderWeeklyTracker() {
 function renderHomeDashboard() {
   if (!el.homePanel) return;
   const left = incompleteDailyTasks().length;
-  const energy = state.daily.hoyolab?.energy;
-  const stamina = energy ? `${energy.current}/${energy.max}` : "未取得";
+  const stamina = staminaSnapshot();
   const syncHistory = loadSyncHistory();
   const latest = syncHistory[0];
   const priorities = typeof growthPriorityRows === "function" ? growthPriorityRows().slice(0, 3) : [];
@@ -3052,8 +3118,8 @@ function renderHomeDashboard() {
     <section class="home-grid">
       <article class="home-card primary">
         <span>現在の活性</span>
-        <strong>${escapeHtml(stamina)}</strong>
-        <em>${state.daily.hoyolab?.summary ? escapeHtml(state.daily.hoyolab.summary) : "HoYoLAB検知で更新"}</em>
+        <strong>${escapeHtml(stamina ? `${stamina.current}/${stamina.max || "?"}` : "未取得")}</strong>
+        <em>${stamina ? escapeHtml(stamina.isFull ? "満タン" : stamina.restoreText ? `満タンまで約 ${stamina.restoreText}` : "回復時間未取得") : "HoYoLAB検知で更新"}</em>
       </article>
       <article class="home-card">
         <span>日課</span>
@@ -3076,15 +3142,15 @@ function renderHomeDashboard() {
 
 async function notifyStaminaIfNeeded() {
   if (!state.settings.staminaNotify) return;
-  const energy = state.daily.hoyolab?.energy;
-  if (!energy) return;
-  const threshold = Number(state.settings.staminaThreshold || 220);
-  if (Number(energy.current || 0) < threshold) return;
-  const key = `${todayKey()}:${threshold}`;
+  const snap = staminaSnapshot();
+  if (!snap || snap.current < snap.threshold) return;
+  const stage = snap.isFull ? "full" : snap.nearFull ? "near" : "threshold";
+  const key = `${todayKey()}:${snap.threshold}:${stage}`;
   if (state.daily.staminaNotifiedKey === key) return;
+  const timing = snap.isFull ? "満タンです" : snap.restoreText ? `満タンまで約 ${snap.restoreText}` : "回復中です";
   await window.zzzApp.notifyDailyIncomplete({
-    title: "norma tool 活性通知",
-    body: `現在の活性 ${energy.current}/${energy.max}。消費タイミングです。`
+    title: stage === "full" ? "norma tool 活性満タン" : "norma tool 活性通知",
+    body: `現在の活性 ${snap.current}/${snap.max || "?"}。${timing}。`
   });
   state.daily.staminaNotifiedKey = key;
   saveDailyState();
@@ -3809,8 +3875,35 @@ function growthPriorityRows() {
       const completion = buildCompletion(character, active, data);
       const owned = data.ownership.owned;
       const levelGap = Math.max(0, 60 - Number(data.materials.currentLevel || 1));
-      const priority = (owned ? 35 : 0) + shortages * 12 + Math.max(0, 72 - discAvg) + Math.min(20, levelGap / 2) + Math.max(0, 85 - completion.total) / 3 + (profile.verified ? 8 : 0);
-      return { character, data, priority: Math.round(priority), shortages, discAvg, completion };
+      const levelScore = Math.min(20, levelGap / 2);
+      const shortageScore = shortages * 12;
+      const discScore = Math.max(0, 72 - discAvg);
+      const completionScore = Math.max(0, 85 - completion.total) / 3;
+      const priority = (owned ? 35 : 0) + shortageScore + discScore + levelScore + completionScore + (profile.verified ? 8 : 0);
+      const reasons = [
+        owned ? "所持済み" : "未所持/同期待ち",
+        levelGap > 0 ? `Lv差 ${levelGap}` : "Lv完了",
+        shortages ? `目標不足 ${shortages}件` : "目標不足少なめ",
+        discAvg < 72 ? `ディスク平均 ${discAvg}` : "ディスク良好",
+        `完成度 ${completion.total}%`
+      ];
+      return {
+        character,
+        data,
+        priority: Math.round(priority),
+        shortages,
+        discAvg,
+        completion,
+        reasons,
+        breakdown: {
+          所持: owned ? 35 : 0,
+          不足: Math.round(shortageScore),
+          ディスク: Math.round(discScore),
+          レベル: Math.round(levelScore),
+          完成度: Math.round(completionScore),
+          ソース: profile.verified ? 8 : 0
+        }
+      };
     })
     .filter((row) => row.data.ownership.owned || row.priority >= 45)
     .sort((a, b) => b.priority - a.priority)
@@ -3842,7 +3935,8 @@ function renderAccountDashboard() {
         <article class="dashboard-row">
           <strong>${escapeHtml(row.character.name)}</strong>
           <span>優先度 ${row.priority} / 完成度 ${row.completion.total}% / Lv${row.data.materials.currentLevel} / ディスク平均 ${row.discAvg}</span>
-          <em>不足${row.shortages}件 / ${escapeHtml(row.character.role)} ${escapeHtml(row.character.element)}</em>
+          <em>${escapeHtml(row.reasons.join(" / "))}</em>
+          <small>${Object.entries(row.breakdown).map(([key, value]) => `${escapeHtml(key)} +${value}`).join(" / ")}</small>
         </article>
       `).join("") : `<div class="empty-detail">所持キャラまたは同期データがありません。</div>`}
     </div>
