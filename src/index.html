@@ -18,7 +18,8 @@
         <div class="brand-mark" title="norma tool">
           <img src="../assets/norma-tool-icon.webp" alt="norma tool" />
         </div>
-        <button class="side-item active" data-view="agents" title="エージェント"><span>AG</span><em>キャラ</em></button>
+        <button class="side-item active" data-view="home" title="ホーム"><span>HM</span><em>ホーム</em></button>
+        <button class="side-item" data-view="agents" title="エージェント"><span>AG</span><em>キャラ</em></button>
         <button class="side-item" data-view="team" title="編成"><span>TM</span><em>編成</em></button>
         <button class="side-item" data-view="warehouse" title="ディスク倉庫"><span>DS</span><em>倉庫</em></button>
         <button class="side-item" data-view="account" title="育成管理"><span>AC</span><em>育成</em></button>
@@ -39,7 +40,11 @@
           </div>
         </section>
 
-        <section id="agentsView" class="view active">
+        <section id="homeView" class="view active">
+          <section id="homePanel" class="home-panel"></section>
+        </section>
+
+        <section id="agentsView" class="view">
           <section class="glass-panel filters">
             <label class="search-box">
               <span>検索</span>
@@ -92,6 +97,8 @@
               <strong>未取得</strong>
               <em>HoYoLAB完了検知で更新します</em>
             </div>
+            <div id="dailyCardsPanel" class="daily-card-grid"></div>
+            <div id="weeklyPanel" class="weekly-panel"></div>
             <div id="dailyList" class="daily-list"></div>
           </section>
         </section>
@@ -105,9 +112,25 @@
               <input id="notificationToggle" type="checkbox" />
               <span>起動時にデイリー未完了通知を出す</span>
             </label>
+            <label class="toggle-line">
+              <input id="staminaNotifyToggle" type="checkbox" />
+              <span>活性がしきい値を超えたら通知する</span>
+            </label>
             <label class="select-line">
               <span>デイリー通知時刻</span>
               <input id="notificationTimeInput" type="time" />
+            </label>
+            <label class="select-line">
+              <span>活性通知しきい値</span>
+              <input id="staminaThresholdInput" type="number" min="1" max="400" />
+            </label>
+            <label class="toggle-line">
+              <input id="autoDetectToggle" type="checkbox" />
+              <span>HoYoLAB日課/活性を自動検知する</span>
+            </label>
+            <label class="select-line">
+              <span>自動検知間隔（分）</span>
+              <input id="autoDetectIntervalInput" type="number" min="5" max="180" />
             </label>
             <label class="toggle-line">
               <input id="autoUpdateToggle" type="checkbox" />

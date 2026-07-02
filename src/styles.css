@@ -1664,6 +1664,78 @@ h3 {
   transform: translateX(120%);
 }
 
+.home-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.home-grid,
+.daily-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+}
+
+.home-card,
+.daily-mini-card,
+.weekly-card {
+  border: 1px solid rgba(181, 124, 255, 0.28);
+  border-radius: 16px;
+  background: rgba(20, 10, 40, 0.82);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.22);
+  padding: 16px;
+  display: grid;
+  gap: 8px;
+}
+
+.home-card.primary {
+  border-color: rgba(255, 112, 207, 0.58);
+  background: linear-gradient(135deg, rgba(67, 34, 116, 0.94), rgba(24, 10, 47, 0.92));
+}
+
+.home-card span,
+.daily-mini-card span,
+.weekly-card span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.home-card strong,
+.daily-mini-card strong,
+.weekly-card strong {
+  color: var(--text);
+  font-size: 22px;
+}
+
+.home-card small,
+.daily-mini-card small,
+.weekly-card small {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.daily-card-grid {
+  margin: 16px 0;
+}
+
+.daily-mini-card.done {
+  border-color: rgba(122, 255, 189, 0.46);
+}
+
+.weekly-panel {
+  margin: 14px 0;
+}
+
+.weekly-card span {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.home-list {
+  padding: 18px;
+}
+
 .agent-card:hover .agent-art img {
   transform: translateY(-6px) scale(1.03);
 }

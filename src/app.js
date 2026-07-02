@@ -247,7 +247,7 @@ const sourceAudit = {
   ]
 };
 
-const ANDROID_APP_VERSION = "0.1.6";
+const ANDROID_APP_VERSION = "0.1.7";
 
 if (!window.zzzApp) {
   window.zzzApp = {
@@ -466,9 +466,12 @@ const state = {
   updateInfo: null
 };
 
+let autoDetectTimer = null;
+
 const el = {
   dataStatus: document.querySelector("#dataStatus"),
   dailyStatus: document.querySelector("#dailyStatus"),
+  homePanel: document.querySelector("#homePanel"),
   grid: document.querySelector("#characterGrid"),
   detail: document.querySelector("#detailPanel"),
   agentPage: document.querySelector("#agentPage"),
@@ -482,10 +485,16 @@ const el = {
   ownershipFilters: document.querySelector("#ownershipFilters"),
   dailyList: document.querySelector("#dailyList"),
   dailyStamina: document.querySelector("#dailyStaminaPanel"),
+  dailyCards: document.querySelector("#dailyCardsPanel"),
+  weeklyPanel: document.querySelector("#weeklyPanel"),
   detectDaily: document.querySelector("#detectDailyBtn"),
   notifyNow: document.querySelector("#notifyNowBtn"),
   notificationToggle: document.querySelector("#notificationToggle"),
   notificationTime: document.querySelector("#notificationTimeInput"),
+  staminaNotifyToggle: document.querySelector("#staminaNotifyToggle"),
+  staminaThreshold: document.querySelector("#staminaThresholdInput"),
+  autoDetectToggle: document.querySelector("#autoDetectToggle"),
+  autoDetectInterval: document.querySelector("#autoDetectIntervalInput"),
   autoUpdateToggle: document.querySelector("#autoUpdateToggle"),
   appUpdateToggle: document.querySelector("#appUpdateToggle"),
   autoBackupToggle: document.querySelector("#autoBackupToggle"),
@@ -530,6 +539,10 @@ function loadSettings() {
   return {
     notifyDaily: saved.notifyDaily ?? true,
     notifyTime: saved.notifyTime || "21:00",
+    staminaNotify: saved.staminaNotify ?? true,
+    staminaThreshold: Number(saved.staminaThreshold || 220),
+    autoDetect: saved.autoDetect ?? false,
+    autoDetectInterval: Number(saved.autoDetectInterval || 30),
     autoUpdate: saved.autoUpdate ?? true,
     appUpdate: saved.appUpdate ?? true,
     autoBackup: saved.autoBackup ?? true
@@ -2947,6 +2960,9 @@ function renderDaily() {
   });
   updateDailyStatus();
   updateDailyStaminaPanel();
+  renderDailyCards();
+  renderWeeklyTracker();
+  renderHomeDashboard();
 }
 
 function formatDurationSeconds(seconds) {
@@ -2969,7 +2985,9 @@ function updateDailyStaminaPanel() {
   const current = Number(energy.current ?? 0);
   const max = Number(energy.max ?? 0);
   const percent = max > 0 ? Math.min(100, Math.max(0, Math.round(current / max * 100))) : 0;
-  const restore = formatDurationSeconds(energy.restore);
+  const elapsed = state.daily.hoyolab?.checkedAt ? Math.floor((Date.now() - new Date(state.daily.hoyolab.checkedAt).getTime()) / 1000) : 0;
+  const remaining = Math.max(0, Number(energy.restore || 0) - elapsed);
+  const restore = formatDurationSeconds(remaining);
   const note = current >= max && max > 0 ? "満タンです" : restore ? `満タンまで約 ${restore}` : "回復時間は未取得";
   el.dailyStamina.innerHTML = `
     <span>現在の活性</span>
@@ -2977,6 +2995,99 @@ function updateDailyStaminaPanel() {
     <em>${note}</em>
     <i style="--value:${percent}%"><b></b></i>
   `;
+}
+
+function dailyCardRows() {
+  const daily = state.daily.hoyolab || {};
+  const energy = daily.energy;
+  const vitality = daily.vitality;
+  const applied = daily.applied || {};
+  return [
+    { label: "活性", value: energy ? `${energy.current}/${energy.max}` : "未取得", state: energy?.spent ? "消費済み" : "確認待ち", active: Boolean(applied[0]) },
+    { label: "デイリー活躍度", value: vitality ? `${vitality.current}/${vitality.max}` : "未取得", state: vitality?.done ? "完了" : "未完了", active: Boolean(applied[1]) },
+    { label: "スクラッチ", value: daily.scratch?.done ? "済み" : "未/不明", state: daily.scratch?.raw || "未取得", active: Boolean(daily.scratch?.done) },
+    { label: "ビデオ屋", value: daily.shop?.state === "finished" ? "完了" : daily.shop?.state === "open" ? "販売中" : "未取得", state: daily.shop?.raw || "未取得", active: daily.shop?.state === "finished" }
+  ];
+}
+
+function renderDailyCards() {
+  if (!el.dailyCards) return;
+  el.dailyCards.innerHTML = dailyCardRows().map((item) => `
+    <article class="daily-mini-card ${item.active ? "done" : ""}">
+      <span>${escapeHtml(item.label)}</span>
+      <strong>${escapeHtml(item.value)}</strong>
+      <em>${escapeHtml(item.state)}</em>
+    </article>
+  `).join("");
+}
+
+function renderWeeklyTracker() {
+  if (!el.weeklyPanel) return;
+  const weeklies = state.daily.hoyolab?.weeklies;
+  if (!weeklies) {
+    el.weeklyPanel.innerHTML = `<div class="weekly-card"><strong>週課</strong><span>HoYoLAB完了検知で更新します</span></div>`;
+    return;
+  }
+  const rows = [
+    { label: "賞金依頼", value: `${weeklies.bounty}/${weeklies.bountyTotal}` },
+    { label: "調査ポイント", value: `${weeklies.surveyPoints}/${weeklies.surveyPointsTotal}` }
+  ];
+  el.weeklyPanel.innerHTML = `
+    <div class="weekly-card">
+      <strong>週課トラッカー</strong>
+      ${rows.map((row) => `<span>${escapeHtml(row.label)} <b>${escapeHtml(row.value)}</b></span>`).join("")}
+    </div>
+  `;
+}
+
+function renderHomeDashboard() {
+  if (!el.homePanel) return;
+  const left = incompleteDailyTasks().length;
+  const energy = state.daily.hoyolab?.energy;
+  const stamina = energy ? `${energy.current}/${energy.max}` : "未取得";
+  const syncHistory = loadSyncHistory();
+  const latest = syncHistory[0];
+  const priorities = typeof growthPriorityRows === "function" ? growthPriorityRows().slice(0, 3) : [];
+  el.homePanel.innerHTML = `
+    <section class="home-grid">
+      <article class="home-card primary">
+        <span>現在の活性</span>
+        <strong>${escapeHtml(stamina)}</strong>
+        <em>${state.daily.hoyolab?.summary ? escapeHtml(state.daily.hoyolab.summary) : "HoYoLAB検知で更新"}</em>
+      </article>
+      <article class="home-card">
+        <span>日課</span>
+        <strong>${left ? `未完了 ${left}` : "完了"}</strong>
+        <em>${state.settings.autoDetect ? `自動検知 ${state.settings.autoDetectInterval}分` : "手動検知"}</em>
+      </article>
+      <article class="home-card">
+        <span>HoYoLAB同期</span>
+        <strong>${latest ? (latest.status === "failed" ? "失敗あり" : "履歴あり") : "未同期"}</strong>
+        <em>${latest ? escapeHtml(new Date(latest.date).toLocaleString("ja-JP")) : "設定からログイン"}</em>
+      </article>
+    </section>
+    <section class="home-list glass-panel">
+      <div class="panel-heading compact"><div><p class="eyebrow">Priority</p><h2>育成優先</h2></div><button class="pill-button" id="homeDetectBtn">検知</button></div>
+      ${priorities.length ? priorities.map((row) => `<div class="dashboard-row"><strong>${escapeHtml(row.character.name)}</strong><span>優先度 ${row.priority} / 完成度 ${row.completion.total}%</span></div>`).join("") : `<div class="empty-detail">所持キャラ同期後に表示します。</div>`}
+    </section>
+  `;
+  el.homePanel.querySelector("#homeDetectBtn")?.addEventListener("click", () => detectDailyFromHoyolab({ silent: false }));
+}
+
+async function notifyStaminaIfNeeded() {
+  if (!state.settings.staminaNotify) return;
+  const energy = state.daily.hoyolab?.energy;
+  if (!energy) return;
+  const threshold = Number(state.settings.staminaThreshold || 220);
+  if (Number(energy.current || 0) < threshold) return;
+  const key = `${todayKey()}:${threshold}`;
+  if (state.daily.staminaNotifiedKey === key) return;
+  await window.zzzApp.notifyDailyIncomplete({
+    title: "norma tool 活性通知",
+    body: `現在の活性 ${energy.current}/${energy.max}。消費タイミングです。`
+  });
+  state.daily.staminaNotifiedKey = key;
+  saveDailyState();
 }
 
 function dailyDetectionSummary(note) {
@@ -3009,6 +3120,9 @@ function applyDailyDetection(note) {
     summary: dailyDetectionSummary(note),
     energy: daily.energy || null,
     vitality: daily.vitality || null,
+    scratch: daily.scratch || null,
+    shop: daily.shop || null,
+    weeklies: daily.weeklies || null,
     applied
   };
   saveDailyState();
@@ -3017,21 +3131,24 @@ function applyDailyDetection(note) {
   return applied;
 }
 
-async function detectDailyFromHoyolab() {
+async function detectDailyFromHoyolab({ silent = false } = {}) {
   if (!window.zzzApp?.hoyolabDailyStatus) {
-    el.dailyStatus.textContent = "HoYoLAB完了検知に未対応です";
+    if (!silent) el.dailyStatus.textContent = "HoYoLAB完了検知に未対応です";
     return;
   }
-  el.dailyStatus.textContent = "HoYoLABで日課状態を確認中";
+  if (!silent) el.dailyStatus.textContent = "HoYoLABで日課状態を確認中";
   try {
     const note = await window.zzzApp.hoyolabDailyStatus();
     const applied = applyDailyDetection(note);
     const count = Object.keys(applied).length;
-    el.dailyStatus.textContent = count
-      ? `HoYoLAB検知: ${count}件反映 / ${state.daily.hoyolab.summary}`
-      : `HoYoLAB検知: 自動反映なし / ${state.daily.hoyolab.summary}`;
+    await notifyStaminaIfNeeded();
+    if (!silent) {
+      el.dailyStatus.textContent = count
+        ? `HoYoLAB検知: ${count}件反映 / ${state.daily.hoyolab.summary}`
+        : `HoYoLAB検知: 自動反映なし / ${state.daily.hoyolab.summary}`;
+    }
   } catch (error) {
-    el.dailyStatus.textContent = `HoYoLAB検知失敗: ${error.message || error}`;
+    if (!silent) el.dailyStatus.textContent = `HoYoLAB検知失敗: ${error.message || error}`;
   }
 }
 
@@ -3744,6 +3861,7 @@ function switchView(view) {
     node.classList.toggle("active", node.dataset.view === view || (view === "agentDetail" && node.dataset.view === "agents"));
   });
   if (view === "team") renderTeamSimulator();
+  if (view === "home") renderHomeDashboard();
   if (view === "warehouse") renderWarehousePanel();
   if (view === "account") renderAccountDashboard();
   if (view === "settings") renderSetupPanel();
@@ -3755,9 +3873,22 @@ function setupChecklist() {
     { label: "キャラデータ更新", done: state.characters.length > 0, note: `${state.characters.length}名` },
     { label: "HoYoLAB同期", done: ownedCount > 0, note: ownedCount ? `所持 ${ownedCount}名` : "未同期" },
     { label: "通知設定", done: state.settings.notifyDaily, note: state.settings.notifyDaily ? `${state.settings.notifyTime || "21:00"}` : "OFF" },
+    { label: "活性通知", done: state.settings.staminaNotify, note: state.settings.staminaNotify ? `${state.settings.staminaThreshold || 220}+` : "OFF" },
+    { label: "HoYoLAB自動検知", done: state.settings.autoDetect, note: state.settings.autoDetect ? `${state.settings.autoDetectInterval || 30}分` : "OFF" },
     { label: "アップデート確認", done: state.settings.appUpdate, note: state.settings.appUpdate ? "ON" : "OFF" },
     { label: "自動バックアップ", done: state.settings.autoBackup, note: state.settings.autoBackup ? "ON" : "OFF" }
   ];
+}
+
+function scheduleAutoDetect() {
+  if (autoDetectTimer) {
+    clearInterval(autoDetectTimer);
+    autoDetectTimer = null;
+  }
+  if (!state.settings.autoDetect) return;
+  const minutes = Math.max(5, Number(state.settings.autoDetectInterval || 30));
+  autoDetectTimer = setInterval(() => detectDailyFromHoyolab({ silent: true }), minutes * 60 * 1000);
+  setTimeout(() => detectDailyFromHoyolab({ silent: true }), 1800);
 }
 
 function renderSetupPanel() {
@@ -3809,6 +3940,10 @@ function bindEvents() {
   el.detectDaily?.addEventListener("click", detectDailyFromHoyolab);
   el.notificationToggle.checked = state.settings.notifyDaily;
   if (el.notificationTime) el.notificationTime.value = state.settings.notifyTime || "21:00";
+  if (el.staminaNotifyToggle) el.staminaNotifyToggle.checked = state.settings.staminaNotify;
+  if (el.staminaThreshold) el.staminaThreshold.value = state.settings.staminaThreshold || 220;
+  if (el.autoDetectToggle) el.autoDetectToggle.checked = state.settings.autoDetect;
+  if (el.autoDetectInterval) el.autoDetectInterval.value = state.settings.autoDetectInterval || 30;
   el.autoUpdateToggle.checked = state.settings.autoUpdate;
   el.appUpdateToggle.checked = state.settings.appUpdate;
   if (el.autoBackupToggle) el.autoBackupToggle.checked = state.settings.autoBackup;
@@ -3822,6 +3957,32 @@ function bindEvents() {
     state.daily.lastNotified = "";
     saveDailyState();
     saveSettings();
+    renderSetupPanel();
+  });
+  el.staminaNotifyToggle?.addEventListener("change", () => {
+    state.settings.staminaNotify = el.staminaNotifyToggle.checked;
+    state.daily.staminaNotifiedKey = "";
+    saveDailyState();
+    saveSettings();
+    renderSetupPanel();
+  });
+  el.staminaThreshold?.addEventListener("change", () => {
+    state.settings.staminaThreshold = Math.max(1, Number(el.staminaThreshold.value || 220));
+    state.daily.staminaNotifiedKey = "";
+    saveDailyState();
+    saveSettings();
+    renderSetupPanel();
+  });
+  el.autoDetectToggle?.addEventListener("change", () => {
+    state.settings.autoDetect = el.autoDetectToggle.checked;
+    saveSettings();
+    scheduleAutoDetect();
+    renderSetupPanel();
+  });
+  el.autoDetectInterval?.addEventListener("change", () => {
+    state.settings.autoDetectInterval = Math.max(5, Number(el.autoDetectInterval.value || 30));
+    saveSettings();
+    scheduleAutoDetect();
     renderSetupPanel();
   });
   el.autoUpdateToggle.addEventListener("change", () => {
@@ -3861,6 +4022,7 @@ async function init() {
   renderWarehousePanel();
   renderAccountDashboard();
   renderSetupPanel();
+  renderHomeDashboard();
   if (state.characters[0]) {
     state.selectedId = state.characters[0].id;
     renderCharacters();
@@ -3868,6 +4030,11 @@ async function init() {
   }
   setTimeout(() => notifyIfDailyIncomplete(), 1200);
   setInterval(() => notifyIfDailyIncomplete(), 1000 * 60 * 30);
+  setInterval(() => {
+    updateDailyStaminaPanel();
+    renderHomeDashboard();
+  }, 1000 * 60);
+  scheduleAutoDetect();
   const info = await window.zzzApp.getAppInfo();
   el.appInfo.textContent = `App ${info.version} / 保存先: ${info.dataPath}`;
   if (state.settings.appUpdate) {

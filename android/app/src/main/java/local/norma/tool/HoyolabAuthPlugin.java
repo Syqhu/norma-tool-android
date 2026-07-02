@@ -72,6 +72,14 @@ public class HoyolabAuthPlugin extends Plugin {
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
         bar.addView(title, titleParams);
 
+        Button back = new Button(getActivity());
+        back.setText("Back");
+        bar.addView(back, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        Button reload = new Button(getActivity());
+        reload.setText("Reload");
+        bar.addView(reload, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
         Button close = new Button(getActivity());
         close.setText("Done");
         bar.addView(close, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -97,6 +105,12 @@ public class HoyolabAuthPlugin extends Plugin {
             cookieManager.flush();
             call.resolve(cookieState());
         });
+        back.setOnClickListener(v -> {
+            if (webView.canGoBack()) {
+                webView.goBack();
+            }
+        });
+        reload.setOnClickListener(v -> webView.reload());
         close.setOnClickListener(v -> dialog.dismiss());
         dialog.show();
         Window shown = dialog.getWindow();
